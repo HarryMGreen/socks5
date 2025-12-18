@@ -13,6 +13,7 @@ type params struct {
 	User         string `env:"PROXY_USER" envDefault:""`
 	Password     string `env:"PROXY_PASSWORD" envDefault:""`
 	Port         string `env:"PROXY_PORT" envDefault:"1080"`
+	ServerIp     string `env:"SERVER_IP" envDefault:""`
 	NetInterface string `env:"NET_INTERFACE" envDefault:"eth0"`
 }
 
@@ -47,12 +48,17 @@ func main() {
 		log.Printf("%+v\n", err)
 	}
 
-	pubIp, err := GetInterfaceIpv4Addr(cfg.NetInterface)
+	dockerIp, err := GetInterfaceIpv4Addr(cfg.NetInterface)
 	if err != nil {
-		log.Printf("get publice IP error %s", err.Error())
-		pubIp = "0.0.0.0"
+		log.Printf("[main] get publice IP error %s", err.Error())
+		dockerIp = "0.0.0.0"
+	}
+	pubIp := cfg.ServerIp
+	if len(pubIp) == 0 {
+		log.Printf("[main] server ip is not configure, udp packets may not be received correctly!")
+		pubIp = dockerIp
 	}
 
-	server, _ := socks5.NewClassicServer(pubIp+":"+cfg.Port, pubIp, cfg.User, cfg.Password, 60, 60)
+	server, _ := socks5.NewClassicServer(dockerIp+":"+cfg.Port, pubIp, cfg.User, cfg.Password, 60, 60)
 	server.ListenAndServe(nil)
 }
