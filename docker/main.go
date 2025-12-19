@@ -17,27 +17,37 @@ type params struct {
 	NetInterface string `env:"NET_INTERFACE" envDefault:"eth0"`
 }
 
-func GetInterfaceIpv4Addr(interfaceName string) (addr string, err error) {
-	var (
-		ief      *net.Interface
-		addrs    []net.Addr
-		ipv4Addr net.IP
-	)
-	if ief, err = net.InterfaceByName(interfaceName); err != nil { // get interface
-		return
+// GetInterfaceIpv4Addr returns the first IPv4 address found for the specified network interface
+func GetInterfaceIpv4Addr(interfaceName string) (string, error) {
+	if interfaceName == "" {
+		return "", fmt.Errorf("interface name cannot be empty")
 	}
-	if addrs, err = ief.Addrs(); err != nil { // get addresses
-		return
+
+	ief, err := net.InterfaceByName(interfaceName)
+	if err != nil {
+		return "", fmt.Errorf("interface %s not found: %w", interfaceName, err)
 	}
-	for _, addr := range addrs { // get ipv4 address
-		if ipv4Addr = addr.(*net.IPNet).IP.To4(); ipv4Addr != nil {
-			break
+
+	// Check if interface is up and running
+	if ief.Flags&net.FlagUp == 0 {
+		return "", fmt.Errorf("interface %s is not up", interfaceName)
+	}
+
+	addrs, err := ief.Addrs()
+	if err != nil {
+		return "", fmt.Errorf("failed to get addresses for interface %s: %w", interfaceName, err)
+	}
+
+	// Find first IPv4 address
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok {
+			if ipv4 := ipnet.IP.To4(); ipv4 != nil {
+				return ipv4.String(), nil
+			}
 		}
 	}
-	if ipv4Addr == nil {
-		return "", fmt.Errorf("interface %s don't have an ipv4 address", interfaceName)
-	}
-	return ipv4Addr.String(), nil
+
+	return "", fmt.Errorf("no IPv4 address found for interface %s", interfaceName)
 }
 
 func main() {
@@ -50,12 +60,12 @@ func main() {
 
 	dockerIp, err := GetInterfaceIpv4Addr(cfg.NetInterface)
 	if err != nil {
-		log.Printf("[main] get publice IP error %s", err.Error())
+		log.Printf("[main] get public IP error %s", err.Error())
 		dockerIp = "0.0.0.0"
 	}
 	pubIp := cfg.ServerIp
 	if len(pubIp) == 0 {
-		log.Printf("[main] server ip is not configure, udp packets may not be received correctly!")
+		log.Printf("[main] server ip is not configured, udp packets may not be received correctly!")
 		pubIp = dockerIp
 	}
 
